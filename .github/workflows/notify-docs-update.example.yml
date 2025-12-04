@@ -1,10 +1,9 @@
-# This file should be placed in the common-events repository
-# Copy this to: common-events/.github/workflows/notify-docs-update.yml
-#
-# This workflow triggers documentation updates in the RFC repository
-# when event structures are modified.
+# 这个 workflow 在当前仓库里生效。
+# 当 common-events-example 里的事件结构（Go 文件）有变更时：
+# 1. 运行你的 Go 生成脚本
+# 2. 把生成的 PlantUML 文档提交回当前仓库（使用仓库 Secret GH_PAT）
 
-name: Notify Documentation Update
+name: Generate Event Docs
 
 on:
   push:
@@ -12,23 +11,52 @@ on:
       - main
       - master
     paths:
-      - 'events/**/*.go'
+      - 'common-events-example/events/**/*.go'
+      - 'event-sync-automation/common-events-example/events/**/*.go'
 
 jobs:
-  notify:
+  generate-and-commit-docs:
     runs-on: ubuntu-latest
+
     steps:
-      - name: Trigger RFC documentation update
-        uses: peter-evans/repository-dispatch@v2
+      - name: Checkout repository
+        uses: actions/checkout@v4
         with:
-          token: ${{ secrets.RFC_REPO_TOKEN }}
-          repository: your-org/rfcs
-          event-type: event-structure-updated
-          client-payload: |
-            {
-              "sha": "${{ github.sha }}",
-              "ref": "${{ github.ref }}",
-              "author": "${{ github.actor }}",
-              "message": "${{ github.event.head_commit.message }}"
-            }
+          # 使用仓库 Secret GH_PAT，避免直接把 PAT 写进仓库
+          token: ${{ secrets.GH_PAT }}
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+
+      - name: Generate PlantUML docs
+        run: |
+          # 为仓库根目录下的 common-events-example 生成文档（如果存在）
+          if [ -d "./common-events-example/events" ]; then
+            go run ./scripts/generate-plantuml.go \
+              -input ./common-events-example/events \
+              -output ./output/event-structures-common.plantuml
+          fi
+
+          # 为 event-sync-automation 里的 common-events-example 生成文档（如果存在）
+          if [ -d "./event-sync-automation/common-events-example/events" ]; then
+            go run ./scripts/generate-plantuml.go \
+              -input ./event-sync-automation/common-events-example/events \
+              -output ./output/event-structures-sync.plantuml
+          fi
+
+      - name: Commit and push changes (if any)
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          if [ -n "$(git status --porcelain)" ]; then
+            git add output/*.plantuml
+            git commit -m "Update event structures docs [skip ci]"
+            git push
+          else
+            echo "No changes to commit"
+          fi
+
 
