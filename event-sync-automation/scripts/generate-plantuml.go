@@ -113,7 +113,24 @@ func parseStruct(name string, st *ast.StructType, fset *token.FileSet, src []byt
 
 	if st.Fields != nil {
 		for _, field := range st.Fields.List {
-			fieldType := string(src[field.Type.Pos()-1 : field.Type.End()-1])
+			// 使用 FileSet 的偏移量来安全地从源代码中截取类型字符串，避免 slice 越界
+			start := fset.Position(field.Type.Pos()).Offset
+			end := fset.Position(field.Type.End()).Offset
+
+			if start < 0 {
+				start = 0
+			}
+			if end > len(src) {
+				end = len(src)
+			}
+			if start > end {
+				start, end = end, end
+			}
+
+			fieldType := ""
+			if start < end {
+				fieldType = string(src[start:end])
+			}
 
 			for _, fieldName := range field.Names {
 				fieldInfo := FieldInfo{
