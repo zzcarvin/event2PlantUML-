@@ -1,0 +1,176 @@
+name: Update Event Documentation
+
+on:
+  repository_dispatch:
+    types: [event-structure-updated]
+  schedule:
+    # Run every 6 hours to check for updates (as backup if webhook fails)
+    - cron: '0 */6 * * *'
+
+jobs:
+  update-docs:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    
+    steps:
+      - name: Checkout current repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          path: current-repo
+
+      - name: Checkout Common Events repository
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ vars.COMMON_EVENTS_REPO || 'your-org/common-events' }}
+          path: common-events
+          token: ${{ secrets.COMMON_EVENTS_TOKEN }}
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+
+      - name: Check events directory exists
+        id: check-events
+        run: |
+          cd common-events
+          echo "Current directory: $(pwd)"
+          echo "Directory contents:"
+          ls -la || dir
+          echo ""
+          if [ -d "./events" ]; then
+            echo "events directory found"
+            echo "Events directory contents:"
+            ls -la ./events || dir events
+            echo "events_exists=true" >> $GITHUB_OUTPUT
+          elif [ -d "events" ]; then
+            echo "events directory found (no ./ prefix)"
+            echo "events_exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "events directory not found"
+            echo "Looking for .go files in repository..."
+            find . -name "*.go" -type f | head -20
+            echo "events_exists=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Find events directory
+        if: steps.check-events.outputs.events_exists == 'false'
+        id: find-events
+        run: |
+          cd common-events
+          # Try to find events directory in common locations
+          if [ -d "events" ]; then
+            echo "events_path=events" >> $GITHUB_OUTPUT
+          elif [ -d "pkg/events" ]; then
+            echo "events_path=pkg/events" >> $GITHUB_OUTPUT
+          elif [ -d "internal/events" ]; then
+            echo "events_path=internal/events" >> $GITHUB_OUTPUT
+          else
+            # Find first directory with .go files
+            EVENTS_DIR=$(find . -type d -name "events" 2>/dev/null | head -1)
+            if [ -n "$EVENTS_DIR" ]; then
+              echo "events_path=$EVENTS_DIR" >> $GITHUB_OUTPUT
+            else
+              # Find directory with most .go files
+              EVENTS_DIR=$(find . -type f -name "*.go" | xargs dirname | sort | uniq -c | sort -rn | head -1 | awk '{print $2}')
+              echo "events_path=$EVENTS_DIR" >> $GITHUB_OUTPUT
+            fi
+          fi
+          EVENTS_PATH="${{ steps.find-events.outputs.events_path }}"
+          echo "Using events path: $EVENTS_PATH"
+
+      - name: Install dependencies
+        run: |
+          cd common-events
+          if [ -f go.mod ]; then
+            go mod download
+          fi
+
+      - name: Generate PlantUML from Go structs
+        id: generate-plantuml
+        env:
+          EVENTS_DIR_PATH: ${{ vars.EVENTS_DIR_PATH || '' }}
+        run: |
+          cd common-events
+          
+          # Determine events directory path (use custom path if provided, otherwise auto-detect)
+          if [ -n "$EVENTS_DIR_PATH" ]; then
+            EVENTS_DIR="$EVENTS_DIR_PATH"
+            echo "Using custom events directory from EVENTS_DIR_PATH: $EVENTS_DIR"
+          elif [ "${{ steps.check-events.outputs.events_exists }}" == "true" ]; then
+            EVENTS_DIR="./events"
+            echo "Using default events directory: $EVENTS_DIR"
+          else
+            EVENTS_DIR="${{ steps.find-events.outputs.events_path }}"
+            echo "Using auto-detected events directory: $EVENTS_DIR"
+          fi
+          
+          # Normalize path (remove leading ./ if present)
+          EVENTS_DIR=$(echo "$EVENTS_DIR" | sed 's|^\./||')
+          
+          echo "Final events directory path: $EVENTS_DIR"
+          
+          # Verify directory exists
+          if [ ! -d "$EVENTS_DIR" ]; then
+            echo "❌ Error: Events directory not found: $EVENTS_DIR"
+            echo ""
+            echo "Available directories in repository:"
+            find . -type d -maxdepth 3 | head -20
+            echo ""
+            echo "Available .go files:"
+            find . -name "*.go" -type f | head -20
+            echo ""
+            echo "To fix this:"
+            echo "1. Check that the events directory exists in the common-events repository"
+            echo "2. Or set the EVENTS_DIR_PATH variable in repository settings"
+            echo "   Settings → Secrets and variables → Actions → Variables"
+            exit 1
+          fi
+          
+          echo "✅ Events directory found: $EVENTS_DIR"
+          
+          # Copy the generator script from current repo
+          mkdir -p scripts
+          cp ../current-repo/event-sync-automation/scripts/generate-plantuml.go scripts/
+          
+          # Generate PlantUML
+          go run scripts/generate-plantuml.go \
+            --input "$EVENTS_DIR" \
+            --output ../current-repo/output/event-structures.plantuml
+
+      - name: Check for changes
+        id: check-changes
+        run: |
+          cd current-repo
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          if [ -n "$(git status --porcelain)" ]; then
+            echo "has_changes=true" >> $GITHUB_OUTPUT
+          else
+            echo "has_changes=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create Pull Request
+        if: steps.check-changes.outputs.has_changes == 'true'
+        uses: peter-evans/create-pull-request@v5
+        with:
+          path: current-repo
+          token: ${{ secrets.GITHUB_TOKEN }}
+          commit-message: "docs: Auto-update event structure diagrams"
+          title: "Auto-update: Event Structure Documentation"
+          body: |
+            This PR automatically updates the event structure PlantUML diagrams based on changes in the common-events package.
+            
+            ## Changes
+            - Updated event structure diagrams from common-events package
+            
+            ## Source
+            - Common Events Commit: ${{ github.event.repository_dispatch.client_payload.sha || github.sha || 'manual trigger' }}
+            - Triggered by: ${{ github.actor }}
+          
+          branch: auto-update-event-docs
+          delete-branch: true
+
