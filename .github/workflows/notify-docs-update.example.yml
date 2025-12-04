@@ -1,0 +1,34 @@
+# This file should be placed in the common-events repository
+# Copy this to: common-events/.github/workflows/notify-docs-update.yml
+#
+# This workflow triggers documentation updates in the RFC repository
+# when event structures are modified.
+
+name: Notify Documentation Update
+
+on:
+  push:
+    branches:
+      - main
+      - master
+    paths:
+      - 'events/**/*.go'
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger RFC documentation update
+        uses: peter-evans/repository-dispatch@v2
+        with:
+          token: ${{ secrets.RFC_REPO_TOKEN }}
+          repository: your-org/rfcs
+          event-type: event-structure-updated
+          client-payload: |
+            {
+              "sha": "${{ github.sha }}",
+              "ref": "${{ github.ref }}",
+              "author": "${{ github.actor }}",
+              "message": "${{ github.event.head_commit.message }}"
+            }
+

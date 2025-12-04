@@ -1,0 +1,38 @@
+# 这个文件需要放在 common-events 仓库中
+# 路径：common-events/.github/workflows/notify-docs-update.yml
+#
+# 功能：当 events/**/*.go 文件有变更时，自动通知当前仓库更新文档
+
+name: Notify Documentation Update
+
+on:
+  push:
+    branches:
+      - main
+      - master
+      - develop
+    paths:
+      - 'events/**/*.go'
+      - 'events/**/*.go.mod'
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger documentation update
+        uses: peter-evans/repository-dispatch@v2
+        with:
+          token: ${{ secrets.DOCS_REPO_TOKEN }}
+          repository: ${{ secrets.DOCS_REPO }}
+          event-type: event-structure-updated
+          client-payload: |
+            {
+              "sha": "${{ github.sha }}",
+              "ref": "${{ github.ref }}",
+              "author": "${{ github.actor }}",
+              "message": "${{ github.event.head_commit.message }}",
+              "committer": "${{ github.event.head_commit.committer.name }}",
+              "repo": "${{ github.repository }}",
+              "branch": "${{ github.ref_name }}"
+            }
+

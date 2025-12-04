@@ -1,0 +1,89 @@
+name: Update Event Documentation
+
+on:
+  workflow_dispatch:
+  repository_dispatch:
+    types: [event-structure-updated]
+  schedule:
+    # Run daily at 2 AM UTC to check for updates
+    - cron: '0 2 * * *'
+
+jobs:
+  update-docs:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    
+    steps:
+      - name: Checkout RFC repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          path: rfc-repo
+
+      - name: Checkout Common Events repository
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ vars.COMMON_EVENTS_REPO || 'your-org/common-events' }}
+          path: common-events
+          token: ${{ secrets.COMMON_EVENTS_TOKEN }}
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+
+      - name: Install dependencies
+        run: |
+          cd common-events
+          if [ -f go.mod ]; then
+            go mod download
+          fi
+
+      - name: Generate PlantUML from Go structs
+        id: generate-plantuml
+        run: |
+          cd common-events
+          # Copy the generator script to common-events if needed
+          if [ ! -f scripts/generate-plantuml.go ]; then
+            mkdir -p scripts
+            cp ../rfc-repo/event-sync-automation/scripts/generate-plantuml.go scripts/
+          fi
+          go run scripts/generate-plantuml.go \
+            --input ./events \
+            --output ../rfc-repo/resources/ado-11543/event-structures.plantuml
+
+      - name: Check for changes
+        id: check-changes
+        run: |
+          cd rfc-repo
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          if [ -n "$(git status --porcelain)" ]; then
+            echo "has_changes=true" >> $GITHUB_OUTPUT
+          else
+            echo "has_changes=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create Pull Request
+        if: steps.check-changes.outputs.has_changes == 'true'
+        uses: peter-evans/create-pull-request@v5
+        with:
+          path: rfc-repo
+          token: ${{ secrets.GITHUB_TOKEN }}
+          commit-message: "docs: Auto-update event structure diagrams"
+          title: "Auto-update: Event Structure Documentation"
+          body: |
+            This PR automatically updates the event structure PlantUML diagrams based on changes in the common-events package.
+            
+            ## Changes
+            - Updated event structure diagrams from common-events package
+            
+            ## Source
+            - Common Events Commit: ${{ github.event.repository_dispatch.client_payload.sha || github.sha || 'manual trigger' }}
+            - Triggered by: ${{ github.actor }}
+          
+          branch: auto-update-event-docs
+          delete-branch: true
+
