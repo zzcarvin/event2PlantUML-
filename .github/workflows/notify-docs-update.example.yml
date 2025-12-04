@@ -32,16 +32,26 @@ jobs:
 
       - name: Generate PlantUML docs
         run: |
+          # 找到 generate-plantuml.go 的位置（兼容两种目录结构）
+          if [ -f "./scripts/generate-plantuml.go" ]; then
+            GEN_SCRIPT="./scripts/generate-plantuml.go"
+          elif [ -f "./event-sync-automation/scripts/generate-plantuml.go" ]; then
+            GEN_SCRIPT="./event-sync-automation/scripts/generate-plantuml.go"
+          else
+            echo "generate-plantuml.go not found in ./scripts or ./event-sync-automation/scripts"
+            exit 1
+          fi
+
           # 为仓库根目录下的 common-events-example 生成文档（如果存在）
           if [ -d "./common-events-example/events" ]; then
-            go run ./scripts/generate-plantuml.go \
+            go run "$GEN_SCRIPT" \
               -input ./common-events-example/events \
               -output ./output/event-structures-common.plantuml
           fi
 
           # 为 event-sync-automation 里的 common-events-example 生成文档（如果存在）
           if [ -d "./event-sync-automation/common-events-example/events" ]; then
-            go run ./scripts/generate-plantuml.go \
+            go run "$GEN_SCRIPT" \
               -input ./event-sync-automation/common-events-example/events \
               -output ./output/event-structures-sync.plantuml
           fi
