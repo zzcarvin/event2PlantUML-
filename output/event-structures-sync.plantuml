@@ -1,0 +1,62 @@
+@startuml
+!theme plain
+skinparam backgroundColor #FFFFFF
+skinparam classAttributeIconSize 0
+
+title Event Structures from Common Events Package
+
+class ClientKVMSessionRequestedEvent {
+  + EventID (event_id) : string
+  + EventName (event_name) : string
+  + EventTime (event_time) : time.Time
+  + ClientID (client_id) : string
+  + DeviceID (device_id) : string
+  + AccountID (account_id) : string
+  + SessionID (session_id) : string
+}
+
+class ClientKVMSessionCloseEvent {
+  + EventID (event_id) : string
+  + EventName (event_name) : string
+  + EventTime (event_time) : time.Time
+  + ClientID (client_id) : string
+  + DeviceID (device_id) : string
+  + SessionID (session_id) : string
+  + Duration (duration) : int64
+}
+
+class DeviceCreatedEvent {
+  + EventID (event_id) : string
+  + EventName (event_name) : string
+  + EventTime (event_time) : time.Time
+  + DeviceID (device_id) : string
+  + AccountID (account_id) : string
+  + DeviceInfo (device_info) : DeviceInfo
+}
+
+class DeviceInfo {
+  + DeviceName (device_name) : string
+  + DeviceType (device_type) : string
+  + SerialNumber (serial_number) : string
+}
+
+class DeviceDeletedEvent {
+  + EventID (event_id) : string
+  + EventName (event_name) : string
+  + EventTime (event_time) : time.Time
+  + DeviceID (device_id) : string
+  + AccountID (account_id) : string
+}
+
+class DeviceUpdatedEvent {
+  + EventID (event_id) : string
+  + EventName (event_name) : string
+  + EventTime (event_time) : time.Time
+  + DeviceID (device_id) : string
+  + AccountID (account_id) : string
+  + DeviceInfo (device_info) : DeviceInfo
+  + Changes (changes) : string
+}
+
+
+@enduml
