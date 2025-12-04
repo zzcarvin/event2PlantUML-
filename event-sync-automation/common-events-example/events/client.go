@@ -10,7 +10,7 @@ type ClientKVMSessionRequestedEvent struct {
     ClientID  string    `json:"client_id"`
     DeviceID  string    `json:"device_id"`
     AccountID string    `json:"account_id"`
-    SessionID string    `json:"session_id"`
+    //SessionID string    `json:"session_id"`
 }
 
 // ClientKVMSessionCloseEvent represents a client KVM session close event
