@@ -6,6 +6,12 @@ skinparam classAttributeIconSize 0
 title Event Structures from Common Events Package
 
 class ClientKVMSessionRequestedEvent {
+  + EventID (event_id) : string
+  + EventName (event_name) : string
+  + EventTime (event_time) : time.Time
+  + ClientID (client_id) : string
+  + DeviceID (device_id) : string
+  + AccountID (account_id) : string
   + SessionID (session_id) : string
 }
 
