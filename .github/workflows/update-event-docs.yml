@@ -3,10 +3,6 @@ name: Update Event Documentation
 on:
   repository_dispatch:
     types: [event-structure-updated]
-  schedule:
-    # Run every 6 hours to check for updates (as backup if webhook fails)
-    - cron: '0 */6 * * *'
-
 jobs:
   update-docs:
     runs-on: ubuntu-latest
@@ -173,4 +169,5 @@ jobs:
           
           branch: auto-update-event-docs
           delete-branch: true
+
 
